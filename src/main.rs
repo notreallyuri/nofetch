@@ -19,25 +19,24 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    // 1. Load Schema (Fail fast if invalid config)
     let schema = config::load_schema(&args.schema).unwrap_or_else(|e| {
         eprintln!("  {} Schema error: {}", "󰅙".red(), e.dimmed());
         fail_fast("Schema", &args.schema, "schemas");
     });
 
-    // 2. Gather data FIRST.
-    // This gives us `data.os` to use for both logo fallback and color logic.
     let data = sys::gather_info();
 
-    // 3. Determine the ASCII art name
-    let art_name = if args.art == "auto" {
-        // E.g., "CachyOS Linux" -> "cachyos"
+    let art_name = if args.art != "auto" {
+        args.art.clone()
+    } else if let Some(art_config) = &schema.art
+        && let Some(fixed_name) = &art_config.name
+    {
+        fixed_name.clone()
+    } else {
         data.os
             .to_lowercase()
             .replace(" linux", "")
             .replace(" ", "")
-    } else {
-        args.art.clone()
     };
 
     let raw_logo = config::load_ascii(&art_name).unwrap_or_else(|_| {
@@ -53,12 +52,16 @@ fn main() {
             vec![schema::FetchColor::White]
         }
     } else {
-        // Delegate to the smart engine: JSON custom array -> Native OS fallback
-        if let Some(art_config) = &schema.art {
-            art_config.get_palette(&data.os)
-        } else {
-            schema::FetchArt { colors: None }.get_palette(&data.os)
-        }
+        schema.art.as_ref().map_or_else(
+            || {
+                schema::FetchArt {
+                    name: None,
+                    colors: None,
+                }
+                .get_palette(&data.os)
+            },
+            |art_config| art_config.get_palette(&data.os),
+        )
     };
 
     let colored_logo = config::colorize_ascii(raw_logo, &palette);

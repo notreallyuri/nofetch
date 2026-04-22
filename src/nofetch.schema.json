@@ -22,14 +22,13 @@
               "magenta",
               "cyan",
               "white",
-              "gray",
-              "primary",
-              "secondary",
-              "accent",
-              "muted"
+              "gray"
             ]
           },
           "description": "The color applied to the ASCII art."
+        },
+        "name": {
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -95,11 +94,7 @@
               "magenta",
               "cyan",
               "white",
-              "gray",
-              "primary",
-              "secondary",
-              "accent",
-              "muted"
+              "gray"
             ],
             "description": "The color applied to the label and/or custom value."
           },

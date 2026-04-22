@@ -178,6 +178,7 @@ impl FetchModule {
 
 #[derive(Deserialize, Debug)]
 pub struct FetchArt {
+    pub name: Option<String>,
     pub colors: Option<Vec<FetchColor>>,
 }
 
