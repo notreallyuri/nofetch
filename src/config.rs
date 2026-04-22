@@ -10,16 +10,36 @@ pub fn get_config_path() -> PathBuf {
 }
 
 pub fn list_available_configs(subfolder: &str) -> Vec<String> {
-    let config_dir = get_config_path().join(subfolder);
+    let base_path = get_config_path().join(subfolder); // Now respects "ascii" or "schemas"
+    let mut available = Vec::new();
 
-    match fs::read_dir(config_dir) {
-        Ok(entries) => entries
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .map(|s| s.split('.').next().unwrap_or(&s).to_string())
-            .collect(),
-        Err(_) => vec![],
+    let mut scan_dir = |path: std::path::PathBuf| {
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                if let Ok(file_type) = entry.file_type()
+                    && file_type.is_file()
+                {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    let clean_name = name
+                        .strip_suffix(".txt")
+                        .or_else(|| name.strip_suffix(".json"))
+                        .unwrap_or(&name)
+                        .to_string();
+                    available.push(clean_name);
+                }
+            }
+        }
+    };
+
+    scan_dir(base_path.clone());
+
+    if subfolder == "ascii" {
+        scan_dir(base_path.join("logos"));
     }
+
+    available.sort();
+    available.dedup();
+    available
 }
 
 static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();

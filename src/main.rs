@@ -26,21 +26,24 @@ fn main() {
 
     let data = sys::gather_info();
 
-    let art_name = if args.art != "auto" {
-        args.art.clone()
-    } else if let Some(art_config) = &schema.art
-        && let Some(fixed_name) = &art_config.name
-    {
-        fixed_name.clone()
-    } else {
-        data.os
-            .to_lowercase()
-            .replace(" linux", "")
-            .replace(" ", "")
+    let art_name = {
+        if args.art != "auto" && !args.art.trim().is_empty() {
+            args.art.clone()
+        } else if let Some(art_config) = &schema.art
+            && let Some(fixed_name) = &art_config.name
+            && !fixed_name.trim().is_empty()
+        {
+            fixed_name.clone()
+        } else {
+            data.os
+                .to_lowercase()
+                .replace(" linux", "")
+                .replace(" ", "")
+        }
     };
 
     let raw_logo = config::load_ascii(&art_name).unwrap_or_else(|_| {
-        fail_fast("Art", &art_name, "ascii/logos");
+        fail_fast("Art", &art_name, "ascii");
     });
 
     let info_lines = schema.generate(&data);
