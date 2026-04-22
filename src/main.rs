@@ -19,32 +19,51 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let logo = config::load_ascii(&args.art).unwrap_or_else(|_| {
-        let os_raw = sysinfo::System::name().unwrap_or_else(|| "linux".to_string());
-
-        let os_normalized = os_raw.to_lowercase().replace(" linux", "").replace(" ", "");
-
-        config::load_ascii(&os_normalized).unwrap_or_else(|_| {
-            fail_fast("Art", &args.art, "ascii/logos");
-        })
-    });
-
+    // 1. Load Schema (Fail fast if invalid config)
     let schema = config::load_schema(&args.schema).unwrap_or_else(|e| {
         eprintln!("  {} Schema error: {}", "󰅙".red(), e.dimmed());
         fail_fast("Schema", &args.schema, "schemas");
     });
 
+    // 2. Gather data FIRST.
+    // This gives us `data.os` to use for both logo fallback and color logic.
     let data = sys::gather_info();
+
+    // 3. Determine the ASCII art name
+    let art_name = if args.art == "auto" {
+        // E.g., "CachyOS Linux" -> "cachyos"
+        data.os
+            .to_lowercase()
+            .replace(" linux", "")
+            .replace(" ", "")
+    } else {
+        args.art.clone()
+    };
+
+    let raw_logo = config::load_ascii(&art_name).unwrap_or_else(|_| {
+        fail_fast("Art", &art_name, "ascii/logos");
+    });
+
     let info_lines = schema.generate(&data);
 
-    let cli_color = args
-        .color
-        .and_then(|c| schema::FetchColor::from_str_name(&c));
-    let config_color = schema.art.as_ref().and_then(|a| a.color.as_ref());
+    let palette = if let Some(cli_color_str) = &args.color {
+        if let Some(c) = schema::FetchColor::from_str_name(cli_color_str) {
+            vec![c]
+        } else {
+            vec![schema::FetchColor::White]
+        }
+    } else {
+        // Delegate to the smart engine: JSON custom array -> Native OS fallback
+        if let Some(art_config) = &schema.art {
+            art_config.get_palette(&data.os)
+        } else {
+            schema::FetchArt { colors: None }.get_palette(&data.os)
+        }
+    };
 
-    let art_color = cli_color.as_ref().or(config_color);
+    let colored_logo = config::colorize_ascii(raw_logo, &palette);
 
-    render::draw(&logo, &info_lines, art_color);
+    render::draw(&colored_logo, &info_lines);
 }
 
 fn fail_fast(kind: &str, name: &str, folder: &str) -> ! {

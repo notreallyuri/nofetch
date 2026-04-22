@@ -1,7 +1,15 @@
-use crate::schema::FetchColor;
+use regex::Regex;
+use std::sync::OnceLock;
 
-pub fn draw(logo: &[String], info_lines: &[String], art_color: Option<&FetchColor>) {
-    let logo_width = logo.iter().map(|s| s.chars().count()).max().unwrap_or(0);
+static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();
+
+fn visible_width(text: &str) -> usize {
+    let re = ANSI_REGEX.get_or_init(|| Regex::new(r"\x1B\[[0-9;?]*[a-zA-Z]").unwrap());
+    re.replace_all(text, "").chars().count()
+}
+
+pub fn draw(logo: &[String], info_lines: &[String]) {
+    let logo_width = logo.iter().map(|s| visible_width(s)).max().unwrap_or(0);
 
     let max_lines = std::cmp::max(logo.len(), info_lines.len());
 
@@ -9,13 +17,10 @@ pub fn draw(logo: &[String], info_lines: &[String], art_color: Option<&FetchColo
         let left_raw = logo.get(i).map(|s| s.as_str()).unwrap_or("");
         let right = info_lines.get(i).map(|s| s.as_str()).unwrap_or("");
 
-        let padded_left = format!("{:<width$}", left_raw, width = logo_width);
+        let current_width = visible_width(left_raw);
+        let padding_needed = logo_width.saturating_sub(current_width);
+        let padding = " ".repeat(padding_needed);
 
-        let final_left = match art_color {
-            Some(color) => color.apply(&padded_left).to_string(),
-            None => padded_left,
-        };
-
-        println!("  {}   {}", final_left, right);
+        println!("  {}{}   {}", left_raw, padding, right);
     }
 }
