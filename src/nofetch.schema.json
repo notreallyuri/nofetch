@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "nofetch Configuration",
+  "description": "Schema for the nofetch system fetcher configuration files",
+  "type": "object",
+  "required": ["modules"],
+  "properties": {
+    "art": {
+      "type": "object",
+      "description": "Configuration for the fetch art display.",
+      "properties": {
+        "colors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "black",
+              "red",
+              "green",
+              "yellow",
+              "blue",
+              "magenta",
+              "cyan",
+              "white",
+              "gray",
+              "primary",
+              "secondary",
+              "accent",
+              "muted"
+            ]
+          },
+          "description": "The color applied to the ASCII art."
+        }
+      },
+      "additionalProperties": false
+    },
+    "modules": {
+      "type": "array",
+      "description": "The sequence of modules to display in the fetch output.",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "os",
+              "title",
+              "os_age",
+              "kernel",
+              "uptime",
+              "memory",
+              "disk",
+              "cpu",
+              "colors",
+              "wm",
+              "packages",
+              "display",
+              "gpu",
+              "gpu_driver",
+              "custom"
+            ],
+            "description": "The type of component to render."
+          },
+          "label": {
+            "type": "string",
+            "description": "Custom text label for the component."
+          },
+          "value": {
+            "type": "string",
+            "description": "Static text or template (e.g., '└{}┘') for custom types."
+          },
+          "format": {
+            "type": "string",
+            "description": "Format string for the output using tokens like {1}, {2}, etc."
+          },
+          "width": {
+            "type": "string",
+            "enum": ["full", "fit"],
+            "description": "Determines if a repeated symbol should fill the entire line or just fit the content."
+          },
+          "repeat": {
+            "type": "string",
+            "description": "The symbol to repeat inside the {} placeholder of the value string."
+          },
+          "color": {
+            "type": "string",
+            "enum": [
+              "black",
+              "red",
+              "green",
+              "yellow",
+              "blue",
+              "magenta",
+              "cyan",
+              "white",
+              "gray",
+              "primary",
+              "secondary",
+              "accent",
+              "muted"
+            ],
+            "description": "The color applied to the label and/or custom value."
+          },
+          "icon": {
+            "type": "string",
+            "description": "A Nerd Font icon character to display at the start of the row."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Determines the shape used when type is 'colors'."
+          },
+          "thresholds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Defines the [medium, max] thresholds for the ':dynamic' color token. Example: [60, 80]"
+          }
+        }
+      }
+    }
+  }
+}
