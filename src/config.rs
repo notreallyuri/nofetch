@@ -46,34 +46,12 @@ static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();
 
 pub fn colorize_ascii(raw_lines: Vec<String>, palette: &[FetchColor]) -> Vec<String> {
     let total_lines = raw_lines.len();
-    let has_tokens = raw_lines
-        .iter()
-        .any(|l| l.contains("${") || l.contains("$c"));
 
     raw_lines
         .into_iter()
         .enumerate()
         .map(|(i, line)| {
-            if has_tokens {
-                let mut result = String::with_capacity(line.len());
-                let chars: Vec<char> = line.chars().collect();
-                let mut j = 0;
-                while j < chars.len() {
-                    if chars[j] == '$' && j + 1 < chars.len() {
-                        let (num_str, skip) = parse_color_token(&chars[j..]);
-                        if let Some(n) = num_str {
-                            if n > 0 && n <= palette.len() {
-                                result.push_str(palette[n - 1].to_ansi_code());
-                            }
-                            j += skip;
-                            continue;
-                        }
-                    }
-                    result.push(chars[j]);
-                    j += 1;
-                }
-                format!("{}\x1b[0m", result)
-            } else if !palette.is_empty() {
+            if !palette.is_empty() {
                 let color_index = (i * palette.len()) / total_lines;
                 palette[color_index].apply(&line).to_string()
             } else {
@@ -81,48 +59,6 @@ pub fn colorize_ascii(raw_lines: Vec<String>, palette: &[FetchColor]) -> Vec<Str
             }
         })
         .collect()
-}
-
-fn parse_color_token(chars: &[char]) -> (Option<usize>, usize) {
-    let mut i = 1;
-    if i >= chars.len() {
-        return (None, 0);
-    }
-
-    if chars[i] == '{' {
-        i += 1;
-        if i < chars.len() && chars[i] == 'c' {
-            i += 1;
-        }
-        let start = i;
-        while i < chars.len() && chars[i].is_ascii_digit() {
-            i += 1;
-        }
-        if i < chars.len() && chars[i] == '}' {
-            let n: usize = chars[start..i]
-                .iter()
-                .collect::<String>()
-                .parse()
-                .unwrap_or(0);
-            return (Some(n), i + 1);
-        }
-    } else if chars[i] == 'c' {
-        i += 1;
-        let start = i;
-        while i < chars.len() && chars[i].is_ascii_digit() {
-            i += 1;
-        }
-        if i > start {
-            let n: usize = chars[start..i]
-                .iter()
-                .collect::<String>()
-                .parse()
-                .unwrap_or(0);
-            return (Some(n), i);
-        }
-    }
-
-    (None, 0)
 }
 
 pub fn load_ascii(art_name: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
