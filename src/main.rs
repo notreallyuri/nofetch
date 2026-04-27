@@ -16,6 +16,8 @@ struct Args {
     art: String,
     #[arg(short, long)]
     color: Option<String>,
+    #[arg(short, long, action = clap::ArgAction::SetTrue)]
+    performance: bool,
 }
 
 fn main() {
@@ -73,8 +75,10 @@ fn main() {
     let colored_logo = config::colorize_ascii(raw_logo, &palette);
 
     render::draw(&colored_logo, &info_lines);
-    let duration = start_time.elapsed();
-    println!("\n  {} Finished in: {:?}", "󱫐".yellow(), duration);
+    if args.performance {
+        let duration = start_time.elapsed();
+        println!("\n  {} Finished in: {:?}", "󱫐".yellow(), duration);
+    }
 }
 
 fn fail_fast(kind: &str, name: &str, folder: &str) -> ! {
