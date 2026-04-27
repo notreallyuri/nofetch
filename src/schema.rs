@@ -1,17 +1,14 @@
 use crate::{render::visible_width, sys::SysData};
 use colored::Colorize;
 use regex::Regex;
-use serde::Deserialize;
 use std::sync::OnceLock;
 
 static TOKEN_REGEX: OnceLock<Regex> = OnceLock::new();
 
-#[derive(Deserialize, Debug, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, PartialEq)]
 pub enum FetchComponent {
     Os,
     Title,
-    #[serde(rename = "os_age")]
     OsAge,
     Kernel,
     Uptime,
@@ -23,14 +20,12 @@ pub enum FetchComponent {
     Wm,
     Display,
     Gpu,
-    #[serde(rename = "gpu_driver")]
     GpuDriver,
     Disk,
     Shell,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, PartialEq, Clone)]
 pub enum FetchColor {
     Black,
     Red,
@@ -88,16 +83,14 @@ impl FetchColor {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, PartialEq)]
 pub enum WidthMode {
     Full,
     Fit,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct FetchModule {
-    #[serde(rename = "type")]
     pub kind: FetchComponent,
     pub label: Option<String>,
     pub value: Option<String>,
@@ -106,7 +99,7 @@ pub struct FetchModule {
     pub symbol: Option<String>,
     pub format: Option<String>,
     pub width: Option<WidthMode>,
-    pub repeat: Option<String>,
+    pub fill: Option<String>,
     pub thresholds: Option<Vec<f64>>,
 }
 
@@ -171,7 +164,7 @@ impl FetchModule {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct FetchArt {
     pub name: Option<String>,
     pub colors: Option<Vec<FetchColor>>,
@@ -222,7 +215,7 @@ impl FetchArt {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct FetchSchema {
     pub art: Option<FetchArt>,
     pub modules: Vec<FetchModule>,
@@ -267,7 +260,7 @@ impl FetchSchema {
                 continue;
             }
 
-            if module.kind == FetchComponent::Custom && module.repeat.is_some() {
+            if module.kind == FetchComponent::Custom && module.fill.is_some() {
                 pre_render.push((Some(module), String::new()));
                 continue;
             }
@@ -403,7 +396,7 @@ impl FetchSchema {
             if let Some(module) = layout_module {
                 let color = module.color.as_ref().unwrap_or(&FetchColor::White);
                 let mut val = module.value.clone().unwrap_or_default();
-                let repeat_sym = module.repeat.as_ref().unwrap();
+                let fill_sym = module.fill.as_ref().unwrap();
 
                 let target_width = match module.width.as_ref().unwrap_or(&WidthMode::Full) {
                     WidthMode::Full => max_width,
@@ -411,8 +404,8 @@ impl FetchSchema {
                 };
 
                 let caps_width = visible_width(&val.replace("{}", ""));
-                let repeat_count = target_width.saturating_sub(caps_width);
-                let filler = repeat_sym.repeat(repeat_count);
+                let fill_count = target_width.saturating_sub(caps_width);
+                let filler = fill_sym.repeat(fill_count);
 
                 val = val.replace("{}", &filler);
                 info_lines.push(color.apply(&val).to_string());
