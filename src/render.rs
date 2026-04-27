@@ -1,11 +1,22 @@
-use regex::Regex;
-use std::sync::OnceLock;
-
-static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();
-
-fn visible_width(text: &str) -> usize {
-    let re = ANSI_REGEX.get_or_init(|| Regex::new(r"\x1B\[[0-9;?]*[a-zA-Z]").unwrap());
-    re.replace_all(text, "").chars().count()
+pub fn visible_width(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    let mut count = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\x1b' && bytes.get(i + 1) == Some(&b'[') {
+            i += 2;
+            while i < bytes.len() && !bytes[i].is_ascii_alphabetic() {
+                i += 1;
+            }
+            i += 1;
+        } else {
+            if bytes[i] & 0b1100_0000 != 0b1000_0000 {
+                count += 1;
+            }
+            i += 1;
+        }
+    }
+    count
 }
 
 pub fn draw(logo: &[String], info_lines: &[String]) {

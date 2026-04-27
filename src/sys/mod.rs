@@ -1,5 +1,5 @@
-use std::time::SystemTime;
-use sysinfo::{Disks, System};
+use std::{thread, time::SystemTime};
+use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 
 mod displays;
 mod gpu;
@@ -14,6 +14,7 @@ pub struct SysData {
     pub os_age: String,
     pub kernel: String,
     pub uptime: String,
+    pub shell: String,
 
     pub mem_used_b: u64,
     pub mem_total_b: u64,
@@ -29,12 +30,23 @@ pub struct SysData {
 }
 
 pub fn gather_info() -> SysData {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let sys = System::new_with_specifics(
+        RefreshKind::nothing()
+            .with_cpu(CpuRefreshKind::nothing().with_frequency())
+            .with_memory(MemoryRefreshKind::everything()),
+    );
+
+    let user = std::env::var("USER").unwrap_or_else(|_| "user".into());
+    let host = System::host_name().unwrap_or_default();
+    let os = System::name().unwrap_or_default();
+    let kernel = System::kernel_version().unwrap_or_default();
+    let uptime_secs = System::uptime();
+    let uptime = format!("{}h {}m", uptime_secs / 3600, (uptime_secs % 3600) / 60);
+    let mem_used_b = sys.used_memory();
+    let mem_total_b = sys.total_memory();
 
     let live_mhz = sys.cpus().first().map(|c| c.frequency()).unwrap_or(0);
     let live_ghz = live_mhz as f64 / 1000.0;
-
     let cpu = sys
         .cpus()
         .first()
@@ -52,46 +64,52 @@ pub fn gather_info() -> SysData {
     let os_age = std::fs::metadata("/")
         .and_then(|m| m.created())
         .map(|created| {
-            let duration = SystemTime::now()
+            let secs = SystemTime::now()
                 .duration_since(created)
-                .unwrap_or_default();
-            format!("{} days", duration.as_secs() / 86400)
+                .unwrap_or_default()
+                .as_secs();
+            format!("{} days", secs / 86400)
         })
         .unwrap_or_else(|_| "Unknown".into());
 
-    let (gpu, gpu_driver) = get_gpu_info();
+    let (gpu, gpu_driver, displays, packages) = thread::scope(|s| {
+        let gpu_t = s.spawn(get_gpu_info);
+        let display_t = s.spawn(detect_displays);
+        let pkg_t = s.spawn(detect_packages);
 
-    let user = std::env::var("USER").unwrap_or_else(|_| "user".into());
-    let host = System::host_name().unwrap_or_default();
-    let os = System::name().unwrap_or_default();
-    let kernel = System::kernel_version().unwrap_or_default();
-
-    let displays = detect_displays();
-
-    let uptime_secs = System::uptime();
-    let uptime = format!("{}h {}m", uptime_secs / 3600, (uptime_secs % 3600) / 60);
-
-    let packages = detect_packages();
+        let (gpu, gpu_driver) = gpu_t
+            .join()
+            .unwrap_or_else(|_| ("Unknown GPU".into(), "Unknown".into()));
+        let displays = display_t.join().unwrap_or_default();
+        let packages = pkg_t.join().unwrap_or_else(|_| "Unknown".into());
+        (gpu, gpu_driver, displays, packages)
+    });
 
     let wm = std::env::var("XDG_CURRENT_DESKTOP")
         .or_else(|_| std::env::var("DESKTOP_SESSION"))
         .or_else(|_| std::env::var("WAYLAND_DISPLAY").map(|_| "Wayland".to_string()))
         .unwrap_or_else(|_| "Unknown".to_string());
-
-    let mem_used_b = sys.used_memory();
-    let mem_total_b = sys.total_memory();
+    let shell = std::env::var("SHELL")
+        .ok()
+        .and_then(|s| {
+            std::path::Path::new(&s)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "Unknown".into());
 
     let disks = Disks::new_with_refreshed_list();
-    let mut disk_used_b = 0;
-    let mut disk_total_b = 0;
 
-    if let Some(disk) = disks
+    let (disk_used_b, disk_total_b) = disks
         .iter()
         .find(|d| d.mount_point().to_string_lossy() == "/")
-    {
-        disk_total_b = disk.total_space();
-        disk_used_b = disk_total_b.saturating_sub(disk.available_space());
-    }
+        .map(|d| {
+            (
+                d.total_space().saturating_sub(d.available_space()),
+                d.total_space(),
+            )
+        })
+        .unwrap_or((0, 0));
 
     SysData {
         user,
@@ -99,6 +117,7 @@ pub fn gather_info() -> SysData {
         os,
         os_age,
         kernel,
+        shell,
         uptime,
         cpu,
         packages,

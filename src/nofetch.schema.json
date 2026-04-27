@@ -47,6 +47,7 @@
               "os",
               "title",
               "os_age",
+              "shell",
               "kernel",
               "uptime",
               "memory",

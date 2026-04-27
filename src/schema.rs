@@ -1,16 +1,10 @@
-use crate::sys::SysData;
+use crate::{render::visible_width, sys::SysData};
 use colored::Colorize;
 use regex::Regex;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
-static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();
 static TOKEN_REGEX: OnceLock<Regex> = OnceLock::new();
-
-fn visible_width(text: &str) -> usize {
-    let re = ANSI_REGEX.get_or_init(|| Regex::new(r"\x1B\[[0-9;?]*[a-zA-Z]").unwrap());
-    re.replace_all(text, "").chars().count()
-}
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +26,7 @@ pub enum FetchComponent {
     #[serde(rename = "gpu_driver")]
     GpuDriver,
     Disk,
+    Shell,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
@@ -289,6 +284,7 @@ impl FetchSchema {
                 FetchComponent::Gpu => "GPU",
                 FetchComponent::OsAge => "OS Age",
                 FetchComponent::GpuDriver => "GPU Driver",
+                FetchComponent::Shell => "Shell",
                 _ => "",
             };
 
@@ -386,6 +382,7 @@ impl FetchSchema {
                 _ => {
                     let stat = match module.kind {
                         FetchComponent::Kernel => &data.kernel,
+                        FetchComponent::Shell => &data.shell,
                         FetchComponent::Uptime => &data.uptime,
                         FetchComponent::Cpu => &data.cpu,
                         FetchComponent::Gpu => &data.gpu,

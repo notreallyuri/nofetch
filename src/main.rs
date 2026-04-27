@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use clap::Parser;
 use colored::Colorize;
 
@@ -17,6 +19,7 @@ struct Args {
 }
 
 fn main() {
+    let start_time = Instant::now();
     let args = Args::parse();
 
     let schema = config::load_schema(&args.schema).unwrap_or_else(|e| {
@@ -70,6 +73,8 @@ fn main() {
     let colored_logo = config::colorize_ascii(raw_logo, &palette);
 
     render::draw(&colored_logo, &info_lines);
+    let duration = start_time.elapsed();
+    println!("\n  {} Finished in: {:?}", "󱫐".yellow(), duration);
 }
 
 fn fail_fast(kind: &str, name: &str, folder: &str) -> ! {

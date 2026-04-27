@@ -10,7 +10,7 @@ pub fn get_config_path() -> PathBuf {
 }
 
 pub fn list_available_configs(subfolder: &str) -> Vec<String> {
-    let base_path = get_config_path().join(subfolder); // Now respects "ascii" or "schemas"
+    let base_path = get_config_path().join(subfolder);
     let mut available = Vec::new();
 
     let mut scan_dir = |path: std::path::PathBuf| {
@@ -43,40 +43,86 @@ pub fn list_available_configs(subfolder: &str) -> Vec<String> {
 }
 
 static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();
-static ASCII_COLOR_REGEX: OnceLock<Regex> = OnceLock::new();
 
 pub fn colorize_ascii(raw_lines: Vec<String>, palette: &[FetchColor]) -> Vec<String> {
-    let re = ASCII_COLOR_REGEX.get_or_init(|| Regex::new(r"\$\{?c?([0-9]+)\}?").unwrap());
-
     let total_lines = raw_lines.len();
-    let has_tokens = raw_lines.iter().any(|l| re.is_match(l));
+    let has_tokens = raw_lines
+        .iter()
+        .any(|l| l.contains("${") || l.contains("$c"));
 
     raw_lines
         .into_iter()
         .enumerate()
         .map(|(i, line)| {
             if has_tokens {
-                let colored_line = re.replace_all(&line, |caps: &regex::Captures| {
-                    if let Ok(index) = caps[1].parse::<usize>() {
-                        // Arrays are 0-indexed, tokens are 1-indexed
-                        if index > 0 && index <= palette.len() {
-                            return palette[index - 1].to_ansi_code().to_string();
+                let mut result = String::with_capacity(line.len());
+                let chars: Vec<char> = line.chars().collect();
+                let mut j = 0;
+                while j < chars.len() {
+                    if chars[j] == '$' && j + 1 < chars.len() {
+                        let (num_str, skip) = parse_color_token(&chars[j..]);
+                        if let Some(n) = num_str {
+                            if n > 0 && n <= palette.len() {
+                                result.push_str(palette[n - 1].to_ansi_code());
+                            }
+                            j += skip;
+                            continue;
                         }
                     }
-                    "".to_string()
-                });
-
-                format!("{}\x1b[0m", colored_line)
+                    result.push(chars[j]);
+                    j += 1;
+                }
+                format!("{}\x1b[0m", result)
             } else if !palette.is_empty() {
                 let color_index = (i * palette.len()) / total_lines;
-                let current_color = &palette[color_index];
-
-                current_color.apply(&line).to_string()
+                palette[color_index].apply(&line).to_string()
             } else {
                 line
             }
         })
         .collect()
+}
+
+fn parse_color_token(chars: &[char]) -> (Option<usize>, usize) {
+    let mut i = 1;
+    if i >= chars.len() {
+        return (None, 0);
+    }
+
+    if chars[i] == '{' {
+        i += 1;
+        if i < chars.len() && chars[i] == 'c' {
+            i += 1;
+        }
+        let start = i;
+        while i < chars.len() && chars[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i < chars.len() && chars[i] == '}' {
+            let n: usize = chars[start..i]
+                .iter()
+                .collect::<String>()
+                .parse()
+                .unwrap_or(0);
+            return (Some(n), i + 1);
+        }
+    } else if chars[i] == 'c' {
+        i += 1;
+        let start = i;
+        while i < chars.len() && chars[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i > start {
+            let n: usize = chars[start..i]
+                .iter()
+                .collect::<String>()
+                .parse()
+                .unwrap_or(0);
+            return (Some(n), i);
+        }
+    }
+
+    (None, 0)
 }
 
 pub fn load_ascii(art_name: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
