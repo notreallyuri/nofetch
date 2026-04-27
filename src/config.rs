@@ -1,7 +1,11 @@
 use crate::schema::{FetchColor, FetchSchema};
 use directories::ProjectDirs;
 use regex::Regex;
-use std::{fs, path::PathBuf, sync::OnceLock};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 pub fn get_config_path() -> PathBuf {
     ProjectDirs::from("", "", "nothings")
@@ -101,4 +105,30 @@ pub fn load_schema(schema_name: &str) -> Result<FetchSchema, String> {
     let json = fs::read_to_string(&schema_path).map_err(|_| "Not found".to_string())?;
 
     serde_json::from_str(&json).map_err(|e| e.to_string())
+}
+
+pub fn is_image(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("png") | Some("jpg") | Some("jpeg") | Some("webp") | Some("gif")
+    )
+}
+
+pub fn get_art_path(art_name: &str) -> Option<std::path::PathBuf> {
+    let ascii_dir = get_config_path().join("ascii");
+    let clean_name = art_name.trim();
+    let lower_name = clean_name.to_lowercase();
+
+    let paths = [
+        ascii_dir.join(clean_name),
+        ascii_dir.join(format!("{}.txt", clean_name)),
+        ascii_dir.join(format!("{}.png", clean_name)),
+        ascii_dir.join(format!("{}.jpg", clean_name)),
+        ascii_dir.join(format!("{}.gif", clean_name)),
+        ascii_dir.join("logos").join(&lower_name),
+        ascii_dir.join("logos").join(format!("{}.txt", lower_name)),
+        ascii_dir.join("logos").join(format!("{}.gif", lower_name)),
+    ];
+
+    paths.into_iter().find(|p| p.exists())
 }

@@ -47,34 +47,40 @@ fn main() {
         }
     };
 
-    let raw_logo = config::load_ascii(&art_name).unwrap_or_else(|_| {
-        fail_fast("Art", &art_name, "ascii");
-    });
-
     let info_lines = schema.generate(&data);
 
-    let palette = if let Some(cli_color_str) = &args.color {
-        if let Some(c) = schema::FetchColor::from_str_name(cli_color_str) {
-            vec![c]
+    if let Some(path) = config::get_art_path(&art_name) {
+        if config::is_image(&path) {
+            render::draw_with_image(&path, &info_lines);
         } else {
-            vec![schema::FetchColor::White]
+            let raw_logo = config::load_ascii(&art_name).unwrap_or_else(|_| {
+                fail_fast("Art", &art_name, "ascii");
+            });
+
+            let palette = if let Some(cli_color_str) = &args.color {
+                schema::FetchColor::from_str_name(cli_color_str)
+                    .map(|c| vec![c])
+                    .unwrap_or(vec![schema::FetchColor::White])
+            } else {
+                schema.art.as_ref().map_or_else(
+                    || {
+                        schema::FetchArt {
+                            name: None,
+                            colors: None,
+                        }
+                        .get_palette(&data.os)
+                    },
+                    |art_config| art_config.get_palette(&data.os),
+                )
+            };
+
+            let colored_logo = config::colorize_ascii(raw_logo, &palette);
+            render::draw(&colored_logo, &info_lines);
         }
     } else {
-        schema.art.as_ref().map_or_else(
-            || {
-                schema::FetchArt {
-                    name: None,
-                    colors: None,
-                }
-                .get_palette(&data.os)
-            },
-            |art_config| art_config.get_palette(&data.os),
-        )
-    };
+        fail_fast("Art", &art_name, "ascii");
+    }
 
-    let colored_logo = config::colorize_ascii(raw_logo, &palette);
-
-    render::draw(&colored_logo, &info_lines);
     if args.performance {
         let duration = start_time.elapsed();
         println!("\n  {} Finished in: {:?}", "󱫐".yellow(), duration);
