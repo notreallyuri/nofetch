@@ -183,6 +183,7 @@ fn parse_schema_from_lua(table: Table) -> Result<FetchSchema, mlua::Error> {
                 .get::<Table>("thresholds")
                 .ok()
                 .map(|t| t.sequence_values::<f64>().filter_map(|v| v.ok()).collect()),
+            separator: m.get("separator").ok(),
         });
     }
 

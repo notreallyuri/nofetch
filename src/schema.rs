@@ -101,6 +101,7 @@ pub struct FetchModule {
     pub width: Option<WidthMode>,
     pub fill: Option<String>,
     pub thresholds: Option<Vec<f64>>,
+    pub separator: Option<String>,
 }
 
 impl FetchModule {
@@ -285,11 +286,18 @@ impl FetchSchema {
             let icon = module.icon.as_deref().unwrap_or(" ");
             let label_color = module.color.as_ref().unwrap_or(&FetchColor::Blue);
 
+            let sep = if display_label.is_empty() {
+                ""
+            } else {
+                module.separator.as_deref().unwrap_or(":")
+            };
+
             let base_str = if display_label.is_empty() {
                 format!("{} ", icon)
             } else {
-                format!("{} {}:", icon, display_label)
+                format!("{} {}{}", icon, display_label, sep)
             };
+
             let colored_label = label_color.apply(&base_str).bold();
 
             if module.kind == FetchComponent::Custom {
