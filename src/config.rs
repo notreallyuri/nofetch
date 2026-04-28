@@ -110,13 +110,13 @@ pub fn load_config(config_name: &str) -> Result<FetchSchema, String> {
     let config_dir = get_config_path();
     let candidates = [
         config_dir.join(format!("{}.lua", config_name)),
-        config_dir.join("config.lua"),
+        config_dir.join("nofetch.lua"),
     ];
 
     let path = candidates
         .iter()
         .find(|p| p.exists())
-        .ok_or_else(|| format!("No config found (tried {}.lua, config.lua)", config_name))?;
+        .ok_or_else(|| format!("No config found (tried {}.lua, nofetch.lua)", config_name))?;
 
     let lua = Lua::new();
     let chunk = std::fs::read_to_string(path).map_err(|e| e.to_string())?;

@@ -10,7 +10,7 @@ pub mod sys;
 
 #[derive(Parser)]
 struct Args {
-    #[arg(short, long, default_value = "config")]
+    #[arg(short, long, default_value = "nofetch")]
     config: String,
     #[arg(short, long, default_value = "auto")]
     art: String,
@@ -92,7 +92,7 @@ fn fail_fast(kind: &str, name: &str, folder: &str) -> ! {
 
     if folder.is_empty() {
         eprintln!(
-            "  {} Expected config at ~/.config/nothings/config.lua",
+            "  {} Expected config at ~/.config/nothings/nofetch.lua",
             "󰌵".blue()
         );
     } else {
