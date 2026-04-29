@@ -58,13 +58,13 @@ fn main() {
             });
 
             let palette = if let Some(cli_color_str) = &args.color {
-                schema::FetchColor::from_str_name(cli_color_str)
+                schema::color::FetchColor::from_str_name(cli_color_str)
                     .map(|c| vec![c])
-                    .unwrap_or(vec![schema::FetchColor::White])
+                    .unwrap_or(vec![schema::color::FetchColor::White])
             } else {
                 config.art.as_ref().map_or_else(
                     || {
-                        schema::FetchArt {
+                        schema::Art {
                             name: None,
                             colors: None,
                         }

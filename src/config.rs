@@ -1,4 +1,11 @@
-use crate::schema::{FetchArt, FetchColor, FetchComponent, FetchModule, FetchSchema, WidthMode};
+use crate::schema::{
+    Art, Schema,
+    color::FetchColor,
+    kind::StatKind,
+    module::{
+        ColorSymbol, ColorsModule, Module, SeparatorModule, StatModule, TextModule, WidthMode,
+    },
+};
 use directories::ProjectDirs;
 use mlua::{Lua, Table};
 use regex::Regex;
@@ -38,7 +45,6 @@ pub fn list_available_configs(subfolder: &str) -> Vec<String> {
     };
 
     scan_dir(base_path.clone());
-
     if subfolder == "arts" {
         scan_dir(base_path.join("logos"));
     }
@@ -52,7 +58,6 @@ static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();
 
 pub fn colorize_ascii(raw_lines: Vec<String>, palette: &[FetchColor]) -> Vec<String> {
     let total_lines = raw_lines.len();
-
     raw_lines
         .into_iter()
         .enumerate()
@@ -70,7 +75,6 @@ pub fn colorize_ascii(raw_lines: Vec<String>, palette: &[FetchColor]) -> Vec<Str
 pub fn load_ascii(art_name: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let config_dir = get_config_path();
     let ascii_dir = config_dir.join("arts");
-
     let clean_name = art_name.trim();
     let lower_name = clean_name.to_lowercase();
 
@@ -86,10 +90,8 @@ pub fn load_ascii(art_name: &str) -> Result<Vec<String>, Box<dyn std::error::Err
     for path in paths {
         if let Ok(bytes) = std::fs::read(&path) {
             let content = String::from_utf8_lossy(&bytes);
-
-            let cleaned_content = re.replace_all(content.trim_end(), "");
-            let lines: Vec<String> = cleaned_content.lines().map(|s| s.to_string()).collect();
-
+            let cleaned = re.replace_all(content.trim_end(), "");
+            let lines: Vec<String> = cleaned.lines().map(|s| s.to_string()).collect();
             if !lines.is_empty() {
                 return Ok(lines);
             }
@@ -106,7 +108,7 @@ pub fn is_image(path: &Path) -> bool {
     )
 }
 
-pub fn load_config(config_name: &str) -> Result<FetchSchema, String> {
+pub fn load_config(config_name: &str) -> Result<Schema, String> {
     let config_dir = get_config_path();
     let candidates = [
         config_dir.join(format!("{}.lua", config_name)),
@@ -125,19 +127,20 @@ pub fn load_config(config_name: &str) -> Result<FetchSchema, String> {
     parse_schema_from_lua(table).map_err(|e| e.to_string())
 }
 
-fn parse_schema_from_lua(table: Table) -> Result<FetchSchema, mlua::Error> {
+fn parse_schema_from_lua(table: Table) -> Result<Schema, mlua::Error> {
     let art = if let Ok(art_table) = table.get::<Table>("art") {
         let name: Option<String> = art_table.get("name").ok();
-        let colors = if let Ok(colors_table) = art_table.get::<Table>("colors") {
-            colors_table
-                .sequence_values::<String>()
-                .filter_map(|v| v.ok())
-                .filter_map(|s| FetchColor::from_str_name(&s))
-                .collect()
-        } else {
-            vec![]
-        };
-        Some(FetchArt {
+        let colors: Vec<FetchColor> = art_table
+            .get::<Table>("colors")
+            .map(|t| {
+                t.sequence_values::<String>()
+                    .filter_map(|v| v.ok())
+                    .filter_map(|s| FetchColor::from_str_name(&s))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Some(Art {
             name,
             colors: if colors.is_empty() {
                 None
@@ -155,64 +158,95 @@ fn parse_schema_from_lua(table: Table) -> Result<FetchSchema, mlua::Error> {
     for module_val in modules_table.sequence_values::<Table>() {
         let m = module_val?;
         let kind_str: String = m.get("type")?;
-        let kind = parse_component(&kind_str).ok_or_else(|| {
-            mlua::Error::RuntimeError(format!("Unknown module type: '{}'", kind_str))
-        })?;
 
-        modules.push(FetchModule {
-            kind,
-            label: m.get("label").ok(),
-            value: m.get("value").ok(),
-            icon: m.get("icon").ok(),
-            symbol: m.get("symbol").ok(),
-            format: m.get("format").ok(),
-            fill: m.get("fill").ok(),
-            color: m
-                .get::<String>("color")
-                .ok()
-                .and_then(|s| FetchColor::from_str_name(&s)),
-            width: m
-                .get::<String>("width")
-                .ok()
-                .and_then(|s| match s.as_str() {
-                    "full" => Some(WidthMode::Full),
-                    "fit" => Some(WidthMode::Fit),
-                    _ => None,
+        let module = match kind_str.as_str() {
+            "colors" => Module::Colors(ColorsModule {
+                symbol: m
+                    .get::<String>("symbol")
+                    .ok()
+                    .map(|s| s.parse::<ColorSymbol>().unwrap())
+                    .unwrap_or(ColorSymbol::Square),
+            }),
+
+            "custom" => {
+                if let Ok(fill) = m.get::<String>("fill") {
+                    Module::Separator(SeparatorModule {
+                        fill,
+                        value: m.get("value").ok(),
+                        width: m
+                            .get::<String>("width")
+                            .ok()
+                            .map(|s| match s.as_str() {
+                                "fit" => WidthMode::Fit,
+                                _ => WidthMode::Full,
+                            })
+                            .unwrap_or(WidthMode::Full),
+                        color: m
+                            .get::<String>("color")
+                            .ok()
+                            .and_then(|s| FetchColor::from_str_name(&s)),
+                    })
+                } else {
+                    Module::Text(TextModule {
+                        value: m.get("value").unwrap_or_default(),
+                        color: m
+                            .get::<String>("color")
+                            .ok()
+                            .and_then(|s| FetchColor::from_str_name(&s)),
+                    })
+                }
+            }
+
+            _ => Module::Stat(StatModule {
+                kind: parse_stat_kind(&kind_str).ok_or_else(|| {
+                    mlua::Error::RuntimeError(format!("Unknown module type: '{}'", kind_str))
+                })?,
+                label: m.get("label").ok(),
+                icon: m.get("icon").ok(),
+                color: m
+                    .get::<String>("color")
+                    .ok()
+                    .and_then(|s| FetchColor::from_str_name(&s)),
+                format: m.get("format").ok(),
+                separator: m.get("separator").ok(),
+                thresholds: m.get::<Table>("thresholds").ok().and_then(|t| {
+                    let v: Vec<f64> = t.sequence_values().filter_map(|v| v.ok()).collect();
+                    if v.len() >= 2 {
+                        Some([v[0], v[1]])
+                    } else {
+                        None
+                    }
                 }),
-            thresholds: m
-                .get::<Table>("thresholds")
-                .ok()
-                .map(|t| t.sequence_values::<f64>().filter_map(|v| v.ok()).collect()),
-            separator: m.get("separator").ok(),
-        });
+            }),
+        };
+
+        modules.push(module);
     }
 
-    Ok(FetchSchema { art, modules })
+    Ok(Schema { art, modules })
 }
 
-fn parse_component(s: &str) -> Option<FetchComponent> {
+fn parse_stat_kind(s: &str) -> Option<StatKind> {
     match s {
-        "os" => Some(FetchComponent::Os),
-        "title" => Some(FetchComponent::Title),
-        "os_age" => Some(FetchComponent::OsAge),
-        "kernel" => Some(FetchComponent::Kernel),
-        "uptime" => Some(FetchComponent::Uptime),
-        "memory" => Some(FetchComponent::Memory),
-        "cpu" => Some(FetchComponent::Cpu),
-        "colors" => Some(FetchComponent::Colors),
-        "custom" => Some(FetchComponent::Custom),
-        "packages" => Some(FetchComponent::Packages),
-        "wm" => Some(FetchComponent::Wm),
-        "display" => Some(FetchComponent::Display),
-        "gpu" => Some(FetchComponent::Gpu),
-        "gpu_driver" => Some(FetchComponent::GpuDriver),
-        "disk" => Some(FetchComponent::Disk),
-        "shell" => Some(FetchComponent::Shell),
+        "os" => Some(StatKind::Os),
+        "title" => Some(StatKind::Title),
+        "os_age" => Some(StatKind::OsAge),
+        "kernel" => Some(StatKind::Kernel),
+        "uptime" => Some(StatKind::Uptime),
+        "memory" => Some(StatKind::Memory),
+        "cpu" => Some(StatKind::Cpu),
+        "packages" => Some(StatKind::Packages),
+        "wm" => Some(StatKind::Wm),
+        "display" => Some(StatKind::Display),
+        "gpu" => Some(StatKind::Gpu),
+        "gpu_driver" => Some(StatKind::GpuDriver),
+        "disk" => Some(StatKind::Disk),
+        "shell" => Some(StatKind::Shell),
         _ => None,
     }
 }
 
-pub fn get_art_path(art_name: &str) -> Option<std::path::PathBuf> {
+pub fn get_art_path(art_name: &str) -> Option<PathBuf> {
     let ascii_dir = get_config_path().join("arts");
     let clean_name = art_name.trim();
     let lower_name = clean_name.to_lowercase();
