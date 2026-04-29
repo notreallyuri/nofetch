@@ -10,41 +10,44 @@ pub fn format_output(
     format: Option<&str>,
     thresholds: Option<[f64; 2]>,
     values: &[String],
+    label: &str,
 ) -> String {
     let output = format.unwrap_or("{1}");
     let [thresh_med, thresh_max] = thresholds.unwrap_or([60.0, 80.0]);
 
-    let re = TOKEN_REGEX.get_or_init(|| Regex::new(r"\{(\d+)(?::([a-zA-Z_]+))?\}").unwrap());
+    let re = TOKEN_REGEX.get_or_init(|| Regex::new(r"\{(\w+)(?::([a-zA-Z_]+))?\}").unwrap());
 
     re.replace_all(output, |caps: &regex::Captures| {
-        let index: usize = caps[1].parse().unwrap_or(0);
-        if index == 0 || index > values.len() {
+        let token = &caps[1];
+
+        let val = if token == "label" {
+            label.to_string()
+        } else if let Ok(index) = token.parse::<usize>()
+            && index > 0
+            && index <= values.len()
+        {
+            values[index - 1].clone()
+        } else {
             return caps[0].to_string();
-        }
-
-        let val = &values[index - 1];
-
-        let Some(color_match) = caps.get(2) else {
-            return val.to_string();
         };
 
-        match color_match.as_str().to_lowercase().as_str() {
-            "dynamic" | "auto" => {
+        match caps.get(2).map(|m| m.as_str().to_lowercase()).as_deref() {
+            Some("dynamic") | Some("auto") => {
                 let num: String = val
                     .chars()
                     .filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
                     .collect();
-
                 match num.parse::<f64>() {
                     Ok(n) if n >= thresh_max => val.red().to_string(),
                     Ok(n) if n >= thresh_med => val.yellow().to_string(),
                     Ok(_) => val.green().to_string(),
-                    Err(_) => val.to_string(),
+                    Err(_) => val,
                 }
             }
-            color_name => FetchColor::from_str_name(color_name)
-                .map(|c| c.apply(val).to_string())
-                .unwrap_or_else(|| val.to_string()),
+            Some(color_name) => FetchColor::from_str_name(color_name)
+                .map(|c| c.apply(&val).to_string())
+                .unwrap_or(val),
+            None => val,
         }
     })
     .to_string()
@@ -103,7 +106,6 @@ impl Schema {
                     let default_label = m.kind.default_label();
                     let display_label = m.label.as_deref().unwrap_or(default_label);
                     let icon = m.icon.as_deref().unwrap_or(" ");
-                    let color = m.color.as_ref().unwrap_or(&FetchColor::Blue);
                     let sep = if display_label.is_empty() {
                         ""
                     } else {
@@ -115,14 +117,26 @@ impl Schema {
                     } else {
                         format!("{} {}{}", icon, display_label, sep)
                     };
-                    let colored_label = color.apply(&base_str).bold();
+                    let plain_label = base_str.bold();
+
+                    let value_color = m.color.as_ref();
 
                     let mut push_line = |stats: Vec<String>| {
-                        let text = format!(
-                            "  {} {}",
-                            colored_label,
-                            format_output(m.format.as_deref(), m.thresholds, &stats)
-                        );
+                        let formatted =
+                            format_output(m.format.as_deref(), m.thresholds, &stats, display_label);
+                        let value_str = if m.format.is_none() {
+                            match value_color {
+                                Some(c) => c.apply(&formatted).to_string(),
+                                None => formatted,
+                            }
+                        } else {
+                            formatted
+                        };
+                        let text = if m.format.as_deref().is_some_and(|f| f.contains("{label}")) {
+                            format!("  {}", value_str)
+                        } else {
+                            format!("  {} {}", plain_label, value_str)
+                        };
                         max_width = max_width.max(visible_width(&text));
                         pre_render.push(PreRendered::Line(text));
                     };
@@ -140,15 +154,33 @@ impl Schema {
                         StatKind::Memory => {
                             let (used, total, perc) = gib_stats(data.mem_used_b, data.mem_total_b);
                             let stats = vec![used, total, perc];
-                            let text = format!(
-                                "  {} {}",
-                                colored_label,
-                                if m.format.is_some() {
-                                    format_output(m.format.as_deref(), m.thresholds, &stats)
-                                } else {
-                                    format!("{} / {} ({})", stats[0], stats[1], stats[2])
-                                }
-                            );
+                            let text = if m.format.as_deref().is_some_and(|f| f.contains("{label}"))
+                            {
+                                format!(
+                                    "  {}",
+                                    format_output(
+                                        m.format.as_deref(),
+                                        m.thresholds,
+                                        &stats,
+                                        display_label
+                                    )
+                                )
+                            } else {
+                                format!(
+                                    "  {} {}",
+                                    plain_label,
+                                    if m.format.is_some() {
+                                        format_output(
+                                            m.format.as_deref(),
+                                            m.thresholds,
+                                            &stats,
+                                            display_label,
+                                        )
+                                    } else {
+                                        format!("{} / {} ({})", stats[0], stats[1], stats[2])
+                                    }
+                                )
+                            };
                             max_width = max_width.max(visible_width(&text));
                             pre_render.push(PreRendered::Line(text));
                         }
@@ -157,21 +189,39 @@ impl Schema {
                             let (used, total, perc) =
                                 gib_stats(data.disk_used_b, data.disk_total_b);
                             let stats = vec![used, total, perc];
-                            let text = format!(
-                                "  {} {}",
-                                colored_label,
-                                if m.format.is_some() {
-                                    format_output(m.format.as_deref(), m.thresholds, &stats)
-                                } else {
-                                    format!("{} / {} ({})", stats[0], stats[1], stats[2])
-                                }
-                            );
+                            let text = if m.format.as_deref().is_some_and(|f| f.contains("{label}"))
+                            {
+                                format!(
+                                    "  {}",
+                                    format_output(
+                                        m.format.as_deref(),
+                                        m.thresholds,
+                                        &stats,
+                                        display_label
+                                    )
+                                )
+                            } else {
+                                format!(
+                                    "  {} {}",
+                                    plain_label,
+                                    if m.format.is_some() {
+                                        format_output(
+                                            m.format.as_deref(),
+                                            m.thresholds,
+                                            &stats,
+                                            display_label,
+                                        )
+                                    } else {
+                                        format!("{} / {} ({})", stats[0], stats[1], stats[2])
+                                    }
+                                )
+                            };
                             max_width = max_width.max(visible_width(&text));
                             pre_render.push(PreRendered::Line(text));
                         }
 
                         kind => {
-                            let stat = match kind {
+                            let stat: &str = match kind {
                                 StatKind::Kernel => &data.kernel,
                                 StatKind::Shell => &data.shell,
                                 StatKind::Uptime => &data.uptime,
@@ -197,7 +247,6 @@ impl Schema {
                 PreRendered::Separator(m) => {
                     let template = m.value.as_deref().unwrap_or("{}");
                     let color = m.color.as_ref().unwrap_or(&FetchColor::White);
-
                     let caps_width = visible_width(&template.replace("{}", ""));
                     let target = match m.width {
                         super::module::WidthMode::Full => max_width,
