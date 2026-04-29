@@ -45,6 +45,7 @@ pub fn draw_with_image(image_path: &std::path::Path, info_lines: &[String]) {
         x: 2,
         y: 0,
         width: Some(30),
+        truecolor: cfg!(target_os = "windows"),
         ..Default::default()
     };
 
