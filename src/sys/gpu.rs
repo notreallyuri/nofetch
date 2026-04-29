@@ -51,21 +51,28 @@ pub fn get_gpu_info() -> (String, String) {
 
     #[cfg(target_os = "windows")]
     {
-        let out = std::process::Command::new("wmic")
-            .args(["path", "win32_VideoController", "get", "name"])
-            .output()
-            .ok()
-            .and_then(|out| String::from_utf8(out.stdout).ok())
-            .unwrap_or_default();
+        let get_reg_value = |key: &str| -> Option<String> {
+            std::process::Command::new("reg")
+                .args([
+                    "query",
+                    "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000",
+                    "/v",
+                    key,
+                ])
+                .output()
+                .ok()
+                .and_then(|out| String::from_utf8(out.stdout).ok())
+                .and_then(|s| {
+                    s.lines()
+                        .find(|l| l.contains("REG_SZ"))
+                        .map(|l| l.split("REG_SZ").last().unwrap_or("").trim().to_string())
+                })
+        };
 
-        let gpu = out
-            .lines()
-            .nth(1)
-            .unwrap_or("Unknown GPU")
-            .trim()
-            .to_string();
+        let gpu = get_reg_value("DriverDesc").unwrap_or_else(|| "Unknown GPU".to_string());
+        let driver = get_reg_value("DriverVersion").unwrap_or_else(|| "WDDM".to_string());
 
-        (gpu, "WDDM".to_string())
+        (gpu, driver)
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]

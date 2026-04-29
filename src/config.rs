@@ -16,9 +16,23 @@ use std::{
 };
 
 pub fn get_config_path() -> PathBuf {
-    ProjectDirs::from("", "", "nothings")
-        .map(|d| d.config_dir().to_path_buf())
-        .expect("Could not find config directory")
+    #[cfg(target_os = "windows")]
+    {
+        directories::UserDirs::new()
+            .map(|u| {
+                u.home_dir()
+                    .join("AppData")
+                    .join("Roaming")
+                    .join("nothings")
+            })
+            .expect("Could not find Roaming AppData")
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        ProjectDirs::from("", "", "nothings")
+            .map(|d| d.config_dir().to_path_buf())
+            .expect("Could not find config directory")
+    }
 }
 
 pub fn list_available_configs(subfolder: &str) -> Vec<String> {
@@ -201,6 +215,7 @@ fn parse_schema_from_lua(table: Table) -> Result<Schema, mlua::Error> {
                 kind: parse_stat_kind(&kind_str).ok_or_else(|| {
                     mlua::Error::RuntimeError(format!("Unknown module type: '{}'", kind_str))
                 })?,
+                path: m.get::<String>("path").ok().filter(|s| !s.is_empty()),
                 label: m.get::<String>("label").ok().filter(|s| !s.is_empty()),
                 icon: m.get::<String>("icon").ok().filter(|s| !s.is_empty()),
                 color: m

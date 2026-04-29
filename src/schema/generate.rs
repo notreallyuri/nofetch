@@ -157,9 +157,17 @@ impl Schema {
                             push_line(stats, default_fmt);
                         }
                         StatKind::Disk => {
-                            let (used, total, perc) =
-                                gib_stats(data.disk_used_b, data.disk_total_b);
-                            let stats = vec![used, total, perc];
+                            let default_path = if cfg!(target_os = "windows") {
+                                "C:\\"
+                            } else {
+                                "/"
+                            };
+                            let target = m.path.as_deref().unwrap_or(default_path);
+
+                            let (used, total) = data.disks.get(target).copied().unwrap_or((0, 0));
+
+                            let (used_str, total_str, perc_str) = gib_stats(used, total);
+                            let stats = vec![used_str, total_str, perc_str];
                             let default_fmt = m
                                 .format
                                 .is_none()

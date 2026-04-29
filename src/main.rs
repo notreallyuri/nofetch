@@ -29,7 +29,7 @@ fn main() {
         fail_fast("Schema", &args.config, "schemas");
     });
 
-    let data = sys::gather_info();
+    let data = sys::gather_info(&config.modules);
 
     let art_name = {
         if args.art != "auto" && !args.art.trim().is_empty() {

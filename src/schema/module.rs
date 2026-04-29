@@ -11,6 +11,7 @@ pub enum WidthMode {
 #[derive(Debug)]
 pub struct StatModule {
     pub kind: StatKind,
+    pub path: Option<String>,
     pub label: Option<String>,
     pub icon: Option<String>,
     pub color: Option<FetchColor>,
