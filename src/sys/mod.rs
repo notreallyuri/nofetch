@@ -137,10 +137,41 @@ pub fn gather_info(modules: &[Module]) -> SysData {
             }
         });
 
-    let (gpu, gpu_driver, displays, packages) = thread::scope(|s| {
+    let (gpu, gpu_driver, displays, packages, disks) = thread::scope(|s| {
         let gpu_t = needs_gpu.then(|| s.spawn(get_gpu_info));
         let display_t = needs_disp.then(|| s.spawn(detect_displays));
         let pkg_t = needs_pkgs.then(|| s.spawn(detect_packages));
+        let disk_t = (!disk_targets.is_empty()).then(|| {
+            let targets = disk_targets.clone();
+            s.spawn(move || {
+                let sys_disks = Disks::new_with_refreshed_list();
+                let mut map = HashMap::new();
+                for target in targets {
+                    let best = sys_disks
+                        .iter()
+                        .filter(|d| {
+                            let mount = d.mount_point().to_string_lossy();
+                            if cfg!(target_os = "windows") {
+                                mount.starts_with(&target)
+                            } else {
+                                target.starts_with(mount.as_ref())
+                            }
+                        })
+                        .max_by_key(|d| d.mount_point().to_string_lossy().len());
+
+                    if let Some(d) = best {
+                        map.insert(
+                            target,
+                            (
+                                d.total_space().saturating_sub(d.available_space()),
+                                d.total_space(),
+                            ),
+                        );
+                    }
+                }
+                map
+            })
+        });
 
         let (gpu, gpu_driver) = gpu_t
             .map(|t| {
@@ -154,37 +185,12 @@ pub fn gather_info(modules: &[Module]) -> SysData {
         let packages = pkg_t
             .map(|t| t.join().unwrap_or_else(|_| "".into()))
             .unwrap_or_else(|| "".into());
+        let disks = disk_t
+            .map(|t| t.join().unwrap_or_default())
+            .unwrap_or_default();
 
-        (gpu, gpu_driver, displays, packages)
+        (gpu, gpu_driver, displays, packages, disks)
     });
-
-    let mut disks = HashMap::new();
-    if !disk_targets.is_empty() {
-        let sys_disks = Disks::new_with_refreshed_list();
-        for target in disk_targets {
-            let best_disk = sys_disks
-                .iter()
-                .filter(|d| {
-                    let mount = d.mount_point().to_string_lossy();
-                    if cfg!(target_os = "windows") {
-                        mount.starts_with(&target)
-                    } else {
-                        target.starts_with(mount.as_ref())
-                    }
-                })
-                .max_by_key(|d| d.mount_point().to_string_lossy().len());
-
-            if let Some(d) = best_disk {
-                disks.insert(
-                    target,
-                    (
-                        d.total_space().saturating_sub(d.available_space()),
-                        d.total_space(),
-                    ),
-                );
-            }
-        }
-    }
 
     SysData {
         user,
