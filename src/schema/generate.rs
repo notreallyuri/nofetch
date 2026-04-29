@@ -106,120 +106,66 @@ impl Schema {
                     let default_label = m.kind.default_label();
                     let display_label = m.label.as_deref().unwrap_or(default_label);
                     let icon = m.icon.as_deref().unwrap_or(" ");
-                    let sep = if display_label.is_empty() {
-                        ""
-                    } else {
-                        m.separator.as_deref().unwrap_or(":")
-                    };
-
-                    let base_str = if display_label.is_empty() {
-                        format!("{} ", icon)
-                    } else {
-                        format!("{} {}{}", icon, display_label, sep)
-                    };
-                    let plain_label = base_str.bold();
-
                     let value_color = m.color.as_ref();
 
-                    let mut push_line = |stats: Vec<String>| {
-                        let formatted =
-                            format_output(m.format.as_deref(), m.thresholds, &stats, display_label);
-                        let value_str = if m.format.is_none() {
+                    let label_in_format = m.format.as_deref().is_some_and(|f| f.contains("{label"));
+
+                    let plain_label = if label_in_format || display_label.is_empty() {
+                        if icon.trim().is_empty() {
+                            "".bold()
+                        } else {
+                            format!("{} ", icon).bold()
+                        }
+                    } else {
+                        let sep = m.separator.as_deref().unwrap_or(":");
+                        format!("{} {}{} ", icon, display_label, sep).bold()
+                    };
+
+                    let mut push_line = |stats: Vec<String>, default_fmt: Option<String>| {
+                        let body = if let Some(fmt) = default_fmt {
                             match value_color {
-                                Some(c) => c.apply(&formatted).to_string(),
-                                None => formatted,
+                                Some(c) => c.apply(&fmt).to_string(),
+                                None => fmt,
                             }
                         } else {
-                            formatted
+                            format_output(m.format.as_deref(), m.thresholds, &stats, display_label)
                         };
-                        let text = if m.format.as_deref().is_some_and(|f| f.contains("{label}")) {
-                            format!("  {}", value_str)
-                        } else {
-                            format!("  {} {}", plain_label, value_str)
-                        };
+                        let text = format!("  {} {}", plain_label, body);
                         max_width = max_width.max(visible_width(&text));
                         pre_render.push(PreRendered::Line(text));
                     };
 
                     match &m.kind {
-                        StatKind::Title => push_line(vec![data.user.clone(), data.host.clone()]),
-                        StatKind::Os => push_line(vec![data.os.clone(), data.kernel.clone()]),
-
+                        StatKind::Title => {
+                            push_line(vec![data.user.clone(), data.host.clone()], None);
+                        }
+                        StatKind::Os => {
+                            push_line(vec![data.os.clone(), data.kernel.clone()], None);
+                        }
                         StatKind::Display => {
                             for monitor in &data.displays {
-                                push_line(vec![monitor.clone()]);
+                                push_line(vec![monitor.clone()], None);
                             }
                         }
-
                         StatKind::Memory => {
                             let (used, total, perc) = gib_stats(data.mem_used_b, data.mem_total_b);
                             let stats = vec![used, total, perc];
-                            let text = if m.format.as_deref().is_some_and(|f| f.contains("{label}"))
-                            {
-                                format!(
-                                    "  {}",
-                                    format_output(
-                                        m.format.as_deref(),
-                                        m.thresholds,
-                                        &stats,
-                                        display_label
-                                    )
-                                )
-                            } else {
-                                format!(
-                                    "  {} {}",
-                                    plain_label,
-                                    if m.format.is_some() {
-                                        format_output(
-                                            m.format.as_deref(),
-                                            m.thresholds,
-                                            &stats,
-                                            display_label,
-                                        )
-                                    } else {
-                                        format!("{} / {} ({})", stats[0], stats[1], stats[2])
-                                    }
-                                )
-                            };
-                            max_width = max_width.max(visible_width(&text));
-                            pre_render.push(PreRendered::Line(text));
+                            let default_fmt = m
+                                .format
+                                .is_none()
+                                .then(|| format!("{} / {} ({})", stats[0], stats[1], stats[2]));
+                            push_line(stats, default_fmt);
                         }
-
                         StatKind::Disk => {
                             let (used, total, perc) =
                                 gib_stats(data.disk_used_b, data.disk_total_b);
                             let stats = vec![used, total, perc];
-                            let text = if m.format.as_deref().is_some_and(|f| f.contains("{label}"))
-                            {
-                                format!(
-                                    "  {}",
-                                    format_output(
-                                        m.format.as_deref(),
-                                        m.thresholds,
-                                        &stats,
-                                        display_label
-                                    )
-                                )
-                            } else {
-                                format!(
-                                    "  {} {}",
-                                    plain_label,
-                                    if m.format.is_some() {
-                                        format_output(
-                                            m.format.as_deref(),
-                                            m.thresholds,
-                                            &stats,
-                                            display_label,
-                                        )
-                                    } else {
-                                        format!("{} / {} ({})", stats[0], stats[1], stats[2])
-                                    }
-                                )
-                            };
-                            max_width = max_width.max(visible_width(&text));
-                            pre_render.push(PreRendered::Line(text));
+                            let default_fmt = m
+                                .format
+                                .is_none()
+                                .then(|| format!("{} / {} ({})", stats[0], stats[1], stats[2]));
+                            push_line(stats, default_fmt);
                         }
-
                         kind => {
                             let stat: &str = match kind {
                                 StatKind::Kernel => &data.kernel,
@@ -233,7 +179,7 @@ impl Schema {
                                 StatKind::OsAge => &data.os_age,
                                 _ => "",
                             };
-                            push_line(vec![stat.to_string()]);
+                            push_line(vec![stat.to_string()], None);
                         }
                     }
                 }

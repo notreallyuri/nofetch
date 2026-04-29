@@ -201,14 +201,14 @@ fn parse_schema_from_lua(table: Table) -> Result<Schema, mlua::Error> {
                 kind: parse_stat_kind(&kind_str).ok_or_else(|| {
                     mlua::Error::RuntimeError(format!("Unknown module type: '{}'", kind_str))
                 })?,
-                label: m.get("label").ok(),
-                icon: m.get("icon").ok(),
+                label: m.get::<String>("label").ok().filter(|s| !s.is_empty()),
+                icon: m.get::<String>("icon").ok().filter(|s| !s.is_empty()),
                 color: m
                     .get::<String>("color")
                     .ok()
                     .and_then(|s| FetchColor::from_str_name(&s)),
-                format: m.get("format").ok(),
-                separator: m.get("separator").ok(),
+                format: m.get::<String>("format").ok().filter(|s| !s.is_empty()),
+                separator: m.get::<String>("separator").ok().filter(|s| !s.is_empty()),
                 thresholds: m.get::<Table>("thresholds").ok().and_then(|t| {
                     let v: Vec<f64> = t.sequence_values().filter_map(|v| v.ok()).collect();
                     if v.len() >= 2 {
