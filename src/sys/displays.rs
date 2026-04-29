@@ -137,10 +137,10 @@ pub fn detect_displays() -> Vec<String> {
                     let parts: Vec<&str> =
                         line.split_whitespace().filter(|s| !s.is_empty()).collect();
                     if parts.len() >= 3 {
-                        if let (Ok(hz), Ok(w), Ok(h)) = (
-                            parts[0].parse::<i32>(),
+                        if let (Ok(w), Ok(h), Ok(hz)) = (
                             parts[1].parse::<i32>(),
                             parts[2].parse::<i32>(),
+                            parts[0].parse::<i32>(),
                         ) {
                             displays.push(format!("{}x{} @ {}Hz", w, h, hz));
                         }

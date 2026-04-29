@@ -90,10 +90,13 @@ fn main() {
 fn fail_fast(kind: &str, name: &str, folder: &str) -> ! {
     eprintln!("  {} {} '{}' not found.", "󰅙".red(), kind, name.bold());
 
+    let config_base = config::get_config_path();
+
     if folder.is_empty() {
         eprintln!(
-            "  {} Expected config at ~/.config/nothings/nofetch.lua",
-            "󰌵".blue()
+            "  {} Expected config at {}/nofetch.lua",
+            "󰌵".blue(),
+            config_base.display()
         );
     } else {
         let available = config::list_available_configs(folder);
@@ -106,9 +109,9 @@ fn fail_fast(kind: &str, name: &str, folder: &str) -> ! {
             );
         } else {
             eprintln!(
-                "  {} No files found in ~/.config/nothings/{}",
+                "  {} No files found in {}",
                 "󰌵".blue(),
-                folder
+                config_base.join(folder).display()
             );
         }
     }

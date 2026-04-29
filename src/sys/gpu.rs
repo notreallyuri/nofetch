@@ -74,6 +74,7 @@ pub fn get_gpu_info() -> (String, String) {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn read_gpu_name_from_sysfs(device: &std::path::Path) -> Option<String> {
     if let Ok(label) = std::fs::read_to_string(device.join("label")) {
         return Some(label.trim().to_string());
@@ -107,6 +108,7 @@ fn read_gpu_name_from_sysfs(device: &std::path::Path) -> Option<String> {
     None
 }
 
+#[cfg(target_os = "linux")]
 fn get_gpu_lspci() -> (String, String) {
     let lspci_out = std::process::Command::new("lspci")
         .arg("-k")
@@ -154,6 +156,7 @@ fn get_gpu_lspci() -> (String, String) {
     (gpu, gpu_driver)
 }
 
+#[cfg(target_os = "linux")]
 fn clean_gpu_name(name: &str) -> String {
     if let Some(start) = name.find('[')
         && let Some(end) = name.find(']')
@@ -163,6 +166,7 @@ fn clean_gpu_name(name: &str) -> String {
     name.to_string()
 }
 
+#[cfg(target_os = "linux")]
 fn lookup_pci_name(vendor_id: &str, device_id: &str) -> Option<String> {
     let paths = ["/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids"];
     let content = paths.iter().find_map(|p| std::fs::read_to_string(p).ok())?;
