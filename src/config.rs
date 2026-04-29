@@ -6,6 +6,7 @@ use crate::schema::{
         ColorSymbol, ColorsModule, Module, SeparatorModule, StatModule, TextModule, WidthMode,
     },
 };
+use colored::Colorize;
 use directories::ProjectDirs;
 use mlua::{Lua, Table};
 use regex::Regex;
@@ -14,6 +15,8 @@ use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
 };
+
+const DEFAULT_CONFIG: &str = include_str!("../default_nofetch.lua");
 
 pub fn get_config_path() -> PathBuf {
     #[cfg(target_os = "windows")]
@@ -129,13 +132,33 @@ pub fn load_config(config_name: &str) -> Result<Schema, String> {
         config_dir.join("nofetch.lua"),
     ];
 
-    let path = candidates
-        .iter()
-        .find(|p| p.exists())
-        .ok_or_else(|| format!("No config found (tried {}.lua, nofetch.lua)", config_name))?;
+    let path = candidates.iter().find(|p| p.exists()).cloned();
+
+    let final_path = match path {
+        Some(p) => p,
+        None => {
+            let default_path = config_dir.join("nofetch.lua");
+
+            if let Err(e) = fs::create_dir_all(&config_dir) {
+                return Err(format!("Failed to create config directory: {}", e));
+            }
+
+            if let Err(e) = fs::write(&default_path, DEFAULT_CONFIG) {
+                return Err(format!("Failed to write default config: {}", e));
+            }
+
+            println!(
+                "  {} Created default config at {}",
+                "󰌵".blue(),
+                default_path.display()
+            );
+
+            default_path
+        }
+    };
 
     let lua = Lua::new();
-    let chunk = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let chunk = std::fs::read_to_string(final_path).map_err(|e| e.to_string())?;
     let table: Table = lua.load(&chunk).eval().map_err(|e| e.to_string())?;
 
     parse_schema_from_lua(table).map_err(|e| e.to_string())
