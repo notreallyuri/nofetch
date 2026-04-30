@@ -39,6 +39,8 @@ fn main() {
             && !fixed_name.trim().is_empty()
         {
             fixed_name.clone()
+        } else if data.os.to_lowercase() == "darwin" {
+            "macos".to_string()
         } else {
             data.os
                 .to_lowercase()
