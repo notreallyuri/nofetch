@@ -120,31 +120,38 @@ pub fn detect_displays() -> Vec<String> {
 
     #[cfg(target_os = "windows")]
     {
-        if displays.is_empty()
-            && let Ok(output) = std::process::Command::new("wmic")
-                .args([
-                    "path",
-                    "Win32_VideoController",
-                    "get",
-                    "CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate",
-                ])
-                .output()
-            && let Ok(text) = String::from_utf8(output.stdout)
-        {
-            let lines: Vec<&str> = text.lines().collect();
-            if lines.len() > 1 {
-                for line in &lines[1..] {
-                    let parts: Vec<&str> =
-                        line.split_whitespace().filter(|s| !s.is_empty()).collect();
-                    if parts.len() >= 3 {
-                        if let (Ok(w), Ok(h), Ok(hz)) = (
-                            parts[1].parse::<i32>(),
-                            parts[2].parse::<i32>(),
-                            parts[0].parse::<i32>(),
-                        ) {
-                            displays.push(format!("{}x{} @ {}Hz", w, h, hz));
+        use std::mem;
+        use windows_sys::Win32::Graphics::Gdi::{
+            DEVMODEW, DISPLAY_DEVICEW, ENUM_CURRENT_SETTINGS, EnumDisplayDevicesW,
+            EnumDisplaySettingsW,
+        };
+
+        if displays.is_empty() {
+            unsafe {
+                let mut i = 0;
+                let mut display_device: DISPLAY_DEVICEW = mem::zeroed();
+                display_device.cb = mem::size_of::<DISPLAY_DEVICEW>() as u32;
+
+                while EnumDisplayDevicesW(std::ptr::null(), i, &mut display_device, 0) != 0 {
+                    if (display_device.StateFlags & 1) != 0 {
+                        let mut dev_mode: DEVMODEW = mem::zeroed();
+                        dev_mode.dmSize = mem::size_of::<DEVMODEW>() as u16;
+
+                        if EnumDisplaySettingsW(
+                            display_device.DeviceName.as_ptr(),
+                            ENUM_CURRENT_SETTINGS,
+                            &mut dev_mode,
+                        ) != 0
+                        {
+                            displays.push(format!(
+                                "{}x{} @ {}Hz",
+                                dev_mode.dmPelsWidth,
+                                dev_mode.dmPelsHeight,
+                                dev_mode.dmDisplayFrequency
+                            ));
                         }
                     }
+                    i += 1;
                 }
             }
         }
