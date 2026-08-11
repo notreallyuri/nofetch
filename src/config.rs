@@ -7,7 +7,6 @@ use crate::schema::{
     },
 };
 use colored::Colorize;
-use directories::ProjectDirs;
 use mlua::{Lua, Table};
 use regex::Regex;
 use std::{
@@ -17,6 +16,7 @@ use std::{
 };
 
 const DEFAULT_CONFIG: &str = include_str!("../default_nofetch.lua");
+const DEFAULT_ART: &str = include_str!("../default_art.txt");
 
 pub fn get_config_path() -> PathBuf {
     #[cfg(target_os = "windows")]
@@ -32,7 +32,7 @@ pub fn get_config_path() -> PathBuf {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        ProjectDirs::from("", "", "nothings")
+        directories::ProjectDirs::from("", "", "nothings")
             .map(|d| d.config_dir().to_path_buf())
             .expect("Could not find config directory")
     }
@@ -75,6 +75,10 @@ static ANSI_REGEX: OnceLock<Regex> = OnceLock::new();
 
 pub fn colorize_ascii(raw_lines: Vec<String>, palette: &[FetchColor]) -> Vec<String> {
     let total_lines = raw_lines.len();
+    if total_lines == 0 {
+        return raw_lines;
+    }
+
     raw_lines
         .into_iter()
         .enumerate()
@@ -87,6 +91,12 @@ pub fn colorize_ascii(raw_lines: Vec<String>, palette: &[FetchColor]) -> Vec<Str
             }
         })
         .collect()
+}
+
+fn clean_ascii(content: &str) -> Vec<String> {
+    let re = ANSI_REGEX.get_or_init(|| Regex::new(r"\x1B\[[0-9;?]*[a-zA-Z]").unwrap());
+    let cleaned = re.replace_all(content.trim_end(), "");
+    cleaned.lines().map(|s| s.to_string()).collect()
 }
 
 pub fn load_ascii(art_name: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -102,13 +112,9 @@ pub fn load_ascii(art_name: &str) -> Result<Vec<String>, Box<dyn std::error::Err
         ascii_dir.join("logos").join(format!("{}.txt", lower_name)),
     ];
 
-    let re = ANSI_REGEX.get_or_init(|| Regex::new(r"\x1B\[[0-9;?]*[a-zA-Z]").unwrap());
-
     for path in paths {
         if let Ok(bytes) = std::fs::read(&path) {
-            let content = String::from_utf8_lossy(&bytes);
-            let cleaned = re.replace_all(content.trim_end(), "");
-            let lines: Vec<String> = cleaned.lines().map(|s| s.to_string()).collect();
+            let lines = clean_ascii(&String::from_utf8_lossy(&bytes));
             if !lines.is_empty() {
                 return Ok(lines);
             }
@@ -116,6 +122,12 @@ pub fn load_ascii(art_name: &str) -> Result<Vec<String>, Box<dyn std::error::Err
     }
 
     Err(format!("Art '{}' not found", clean_name).into())
+}
+
+/// Built-in OS-neutral logo, used when art was auto-detected but no matching
+/// file exists yet (e.g. a fresh install with an unpopulated `arts/` folder).
+pub fn default_ascii() -> Vec<String> {
+    clean_ascii(DEFAULT_ART)
 }
 
 pub fn is_image(path: &Path) -> bool {

@@ -13,7 +13,7 @@ return {
 		{ type = "title", icon = "", format = "{1} @ {2}" },
 
 		-- Top border
-		{ type = "custom", value = "    ┌─────────┐", color = "gray" },
+		{ type = "custom", value = "   ┌─────────┐" },
 
 		-- System Information
 		{ type = "os", label = "OS", separator = "", format = "│ {label:blue}      │ {1}" },
@@ -62,7 +62,7 @@ return {
 		{ type = "os_age", label = "Age", separator = "", format = "│ {label:gray}     │ {1}" },
 
 		-- Bottom border
-		{ type = "custom", value = "    └─────────┘", color = "gray" },
+		{ type = "custom", value = "   └─────────┘" },
 
 		-- Blank line spacer
 		{ type = "custom", value = "" },
