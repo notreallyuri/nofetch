@@ -81,7 +81,8 @@ mod windows_gpu {
     pub fn get() -> (String, String) {
         if let Some((name, subkey)) = active_adapter() {
             let desc = reg_string(&subkey, "DriverDesc").unwrap_or(name);
-            let version = reg_string(&subkey, "DriverVersion").unwrap_or_else(|| "WDDM".to_string());
+            let version =
+                reg_string(&subkey, "DriverVersion").unwrap_or_else(|| "WDDM".to_string());
             return (desc, version);
         }
         scan_class_keys()
@@ -188,7 +189,8 @@ mod windows_gpu {
             if desc.to_ascii_lowercase() == BASIC_ADAPTER {
                 continue;
             }
-            let version = reg_string(&subkey, "DriverVersion").unwrap_or_else(|| "WDDM".to_string());
+            let version =
+                reg_string(&subkey, "DriverVersion").unwrap_or_else(|| "WDDM".to_string());
             return (desc, version);
         }
 

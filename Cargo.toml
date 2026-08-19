@@ -12,6 +12,9 @@ sysinfo = "0.38.4"
 image = "0.25.10"
 regex = "1.12.3"
 mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
+base64 = "0.22"
+# Only for `window_size()`; default features would pull in the event loop.
+crossterm = { version = "0.29", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 viuer = { version = "0.11.0", features = ["print-file", "sixel"] }
@@ -20,6 +23,7 @@ windows-sys = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_System_Registry",
 ] }
+crossterm = { version = "0.29", default-features = false, features = ["windows"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 viuer = { version = "0.11.0", features = ["print-file"] }

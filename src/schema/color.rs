@@ -14,6 +14,12 @@ pub enum FetchColor {
 }
 
 impl FetchColor {
+    /// Every name `from_str_name` accepts. Kept beside it so `--help` can list
+    /// the palette without a second copy of the table drifting out of date.
+    pub const NAMES: [&'static str; 9] = [
+        "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "gray",
+    ];
+
     pub fn from_str_name(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "black" => Some(FetchColor::Black),
